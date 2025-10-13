@@ -1,0 +1,30 @@
+{
+  "sender_name": "Muhammad Talal",
+  "is_unread": false,
+  "conversation_preview": "can we be friends and discuss about things .\n\nCan you please share your background and your experien...",
+  "total_messages": 4,
+  "messages": [
+    {
+      "is_sent": false,
+      "message": "Hy",
+      "timestamp": ""
+    },
+    {
+      "is_sent": false,
+      "message": "Muhammad sent you a recommendationReview Recommendation:https://www.linkedin.com/recs/received/?senderId=muhammad-talal-84ab8b271",
+      "timestamp": ""
+    },
+    {
+      "is_sent": false,
+      "message": "Hello brother",
+      "timestamp": "6:02 PM"
+    },
+    {
+      "is_sent": false,
+      "message": "can we be friends and discuss about things .\n\nCan you please share your background and your experience",
+      "timestamp": ""
+    }
+  ],
+  "fetch_time": "2025-10-02T18:28:46.138642",
+  "last_received_message": "can we be friends and discuss about things .\n\nCan you please share your background and your experience"
+}

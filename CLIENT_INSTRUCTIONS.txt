@@ -1,0 +1,39 @@
+===============================================
+   LinkedIn Auto System - Client Instructions
+===============================================
+
+FIRST TIME SETUP (Do this ONCE):
+
+Step 1 - Install Dependencies:
+   • Double-click "install_dependencies.bat"
+   • This will install all required packages (may take 5-10 minutes)
+   • Wait for "INSTALLATION COMPLETED!" message
+
+DAILY USE:
+
+Step 2 - Start the System:
+   • Double-click "quick_start.bat" 
+   • This starts both services immediately
+   • Much faster than the installation process
+
+WHAT HAPPENS:
+   • Backend server starts at: http://127.0.0.1:5000
+   • Frontend interface opens at: http://localhost:3000
+   • Your browser should automatically open to the frontend
+
+HOW TO STOP:
+   • Close both command prompt windows that opened
+   • Or press Ctrl+C in each window
+
+REQUIREMENTS:
+   • Python must be installed on your computer
+   • Node.js must be installed on your computer
+   • Internet connection for LinkedIn access
+
+TROUBLESHOOTING:
+   • If you get "Python not found" - install Python from python.org
+   • If you get "Node not found" - install Node.js from nodejs.org
+   • If ports are busy, close any other applications using ports 3000 or 5000
+
+For support, contact the developer.
+=============================================== 

@@ -1,0 +1,110 @@
+{
+  "sender_name": "Fahad Ramzan",
+  "is_unread": false,
+  "conversation_preview": "hey",
+  "total_messages": 20,
+  "messages": [
+    {
+      "is_sent": true,
+      "message": "okay",
+      "timestamp": ""
+    },
+    {
+      "is_sent": true,
+      "message": "hey",
+      "timestamp": ""
+    },
+    {
+      "is_sent": true,
+      "message": "oka",
+      "timestamp": ""
+    },
+    {
+      "is_sent": true,
+      "message": "hmm",
+      "timestamp": ""
+    },
+    {
+      "is_sent": true,
+      "message": "d",
+      "timestamp": ""
+    },
+    {
+      "is_sent": false,
+      "message": "d",
+      "timestamp": ""
+    },
+    {
+      "is_sent": true,
+      "message": "d",
+      "timestamp": ""
+    },
+    {
+      "is_sent": true,
+      "message": "d",
+      "timestamp": ""
+    },
+    {
+      "is_sent": true,
+      "message": "hii",
+      "timestamp": ""
+    },
+    {
+      "is_sent": true,
+      "message": "ed",
+      "timestamp": ""
+    },
+    {
+      "is_sent": true,
+      "message": "ok",
+      "timestamp": ""
+    },
+    {
+      "is_sent": true,
+      "message": "no",
+      "timestamp": ""
+    },
+    {
+      "is_sent": false,
+      "message": "hey",
+      "timestamp": ""
+    },
+    {
+      "is_sent": false,
+      "message": "how u doing",
+      "timestamp": ""
+    },
+    {
+      "is_sent": false,
+      "message": "gee?",
+      "timestamp": ""
+    },
+    {
+      "is_sent": false,
+      "message": "gee?",
+      "timestamp": ""
+    },
+    {
+      "is_sent": false,
+      "message": "hey",
+      "timestamp": ""
+    },
+    {
+      "is_sent": false,
+      "message": "Hi",
+      "timestamp": "6:27 PM"
+    },
+    {
+      "is_sent": true,
+      "message": "Yes",
+      "timestamp": "6:27 PM"
+    },
+    {
+      "is_sent": false,
+      "message": "hey",
+      "timestamp": "6:24 PM"
+    }
+  ],
+  "fetch_time": "2025-10-02T20:54:31.251090",
+  "last_received_message": "hey"
+}

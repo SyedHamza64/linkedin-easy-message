@@ -1,0 +1,6 @@
+timestamp,sender_name,original_message,category,matched_keyword,response_template,personalized_response,response_sent
+2025-01-01T10:00:00.000000,John Doe,Hi there,uncategorized,,,,False
+2025-01-01T10:05:00.000000,Jane Smith,Thanks for reaching out,uncategorized,,,,False
+2025-01-01T10:10:00.000000,Mike Johnson,I'm interested,interessato,sono interessato,"Grazie [firstname] per la gentile risposta e per l'interesse! Invia pure il tuo CV all'indirizzo recruiting@company.com con i tuoi recapiti telefonici.","Grazie Mike per la gentile risposta e per l'interesse! Invia pure il tuo CV all'indirizzo recruiting@company.com con i tuoi recapiti telefonici.",False
+2025-01-01T10:15:00.000000,Sarah Wilson,Sono disponibile per una call,interessato,sono disponibile per una call,"Grazie [firstname] per la gentile risposta e per l'interesse! Invia pure il tuo CV all'indirizzo recruiting@company.com","Grazie Sarah per la gentile risposta e per l'interesse! Invia pure il tuo CV all'indirizzo recruiting@company.com",False
+2025-01-01T10:20:00.000000,Bob Anderson,Not interested,altro,not interested,"Grazie per il tempo dedicato. Ti auguro una buona giornata!","Grazie per il tempo dedicato. Ti auguro una buona giornata!",False 

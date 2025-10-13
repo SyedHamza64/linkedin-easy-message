@@ -1,0 +1,35 @@
+{
+  "sender_name": "Qasim Rizwan",
+  "is_unread": false,
+  "conversation_preview": "Thanks",
+  "total_messages": 5,
+  "messages": [
+    {
+      "is_sent": false,
+      "message": "Sir i want job",
+      "timestamp": ""
+    },
+    {
+      "is_sent": false,
+      "message": "Sir i want job Plz help me",
+      "timestamp": ""
+    },
+    {
+      "is_sent": false,
+      "message": "Sir i want job",
+      "timestamp": ""
+    },
+    {
+      "is_sent": true,
+      "message": "Congratulations! You are selected for the job of security guard outside of FAST University. Report as soon as possible. Thank you!",
+      "timestamp": ""
+    },
+    {
+      "is_sent": false,
+      "message": "Thanks",
+      "timestamp": ""
+    }
+  ],
+  "fetch_time": "2025-10-02T18:28:37.806478",
+  "last_received_message": "Thanks"
+}

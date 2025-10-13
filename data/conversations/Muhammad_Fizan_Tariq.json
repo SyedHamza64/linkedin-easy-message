@@ -1,0 +1,15 @@
+{
+  "sender_name": "Muhammad Fizan Tariq",
+  "is_unread": false,
+  "conversation_preview": "👍",
+  "total_messages": 1,
+  "messages": [
+    {
+      "is_sent": false,
+      "message": "👍",
+      "timestamp": "12:15 AM"
+    }
+  ],
+  "fetch_time": "2025-10-02T18:28:54.284976",
+  "last_received_message": "👍"
+}

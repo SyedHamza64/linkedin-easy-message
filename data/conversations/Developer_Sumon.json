@@ -1,0 +1,30 @@
+{
+  "sender_name": "Developer Sumon",
+  "is_unread": false,
+  "conversation_preview": "hello",
+  "total_messages": 4,
+  "messages": [
+    {
+      "is_sent": false,
+      "message": "Hello  bro",
+      "timestamp": "6:42 PM"
+    },
+    {
+      "is_sent": false,
+      "message": "contact me",
+      "timestamp": "6:42 PM"
+    },
+    {
+      "is_sent": false,
+      "message": "whates up number sher",
+      "timestamp": "6:42 PM"
+    },
+    {
+      "is_sent": false,
+      "message": "hello",
+      "timestamp": "1:43 PM"
+    }
+  ],
+  "fetch_time": "2025-10-02T18:28:49.760861",
+  "last_received_message": "hello"
+}

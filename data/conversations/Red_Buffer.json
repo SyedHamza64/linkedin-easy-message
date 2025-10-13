@@ -1,0 +1,15 @@
+{
+  "sender_name": "Red Buffer",
+  "is_unread": true,
+  "conversation_preview": "Hello,\n\nPlease apply using this link www.redbuffer.ai/career/",
+  "total_messages": 1,
+  "messages": [
+    {
+      "is_sent": false,
+      "message": "Hello,\n\nPlease apply using this link www.redbuffer.ai/career/",
+      "timestamp": "9:35 PM"
+    }
+  ],
+  "fetch_time": "2025-10-02T20:54:43.920218",
+  "last_received_message": "Hello,\n\nPlease apply using this link www.redbuffer.ai/career/"
+}

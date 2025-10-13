@@ -1,0 +1,30 @@
+{
+  "sender_name": "Mariam Gilani",
+  "is_unread": false,
+  "conversation_preview": "Hey Fahad,\nWhile I'm truly intrigued by your profile, I think your studies might come in the way of ...",
+  "total_messages": 4,
+  "messages": [
+    {
+      "is_sent": false,
+      "message": "Hey Fahad!How are you? At Truck It In, we are in search of a Data Science intern. If you or someone you know is interested in such an opportunity, please let me know. It's a 2-month, paid, internship program that leads to a full-time role. Will be waiting to hear from you!Regards",
+      "timestamp": ""
+    },
+    {
+      "is_sent": true,
+      "message": "Hi, I hope you’re doing well! I’m currently in my 7th semester of Data Science at FAST University, which is ending in a few weeks, and I’m highly interested in the internship opportunity at Truck It In. I’d love to learn more about the role and discuss how I can contribute. Looking forward to your response!",
+      "timestamp": ""
+    },
+    {
+      "is_sent": false,
+      "message": "Hey Fahad,\nWhile I'm truly intrigued by your profile, I think your studies might come in the way of this opportunity as it is an on-site internship with the timings of 9 to 5. It does lead to a full time role but as mentioned, your ongoing studies might pose a challenge for you. I would love for you to join our team in the near future, once you have completed your studies. I wish you all the best! And I wish to hear from you soon in the future.\n\nBest Regards",
+      "timestamp": ""
+    },
+    {
+      "is_sent": true,
+      "message": "Thank you for your kind words and consideration; I look forward to reconnecting in the future!",
+      "timestamp": "1:52 PM"
+    }
+  ],
+  "fetch_time": "2025-10-02T18:28:57.869900",
+  "last_received_message": "Hey Fahad,\nWhile I'm truly intrigued by your profile, I think your studies might come in the way of this opportunity as it is an on-site internship with the timings of 9 to 5. It does lead to a full time role but as mentioned, your ongoing studies might pose a challenge for you. I would love for you to join our team in the near future, once you have completed your studies. I wish you all the best! And I wish to hear from you soon in the future.\n\nBest Regards"
+}
