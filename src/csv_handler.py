@@ -1,6 +1,5 @@
 import csv
 import os
-import pandas as pd
 from datetime import datetime
 
 class CSVHandler:
@@ -28,17 +27,17 @@ class CSVHandler:
         """Load response templates from CSV"""
         try:
             templates = []
-            df = pd.read_csv(self.templates_path, encoding='utf-8')
-            
-            for _, row in df.iterrows():
-                # Split keywords by pipe character
-                keywords = [k.strip() for k in row['keywords'].split('|')]
-                
-                templates.append({
-                    'status': row['status'],
-                    'keywords': keywords,
-                    'response': row['response']
-                })
+            with open(self.templates_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    # Split keywords by pipe character
+                    keywords = [k.strip() for k in row['keywords'].split('|')]
+                    
+                    templates.append({
+                        'status': row['status'],
+                        'keywords': keywords,
+                        'response': row['response']
+                    })
             
             print(f"✓ Loaded {len(templates)} response templates")
             return templates
@@ -75,8 +74,13 @@ class CSVHandler:
             if not os.path.exists(self.history_path):
                 return []
             
-            df = pd.read_csv(self.history_path, encoding='utf-8')
-            return df.to_dict('records')
+            history = []
+            with open(self.history_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    history.append(row)
+            
+            return history
             
         except Exception as e:
             print(f"✗ Error loading history: {str(e)}")

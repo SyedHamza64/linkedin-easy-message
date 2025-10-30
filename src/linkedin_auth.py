@@ -10,21 +10,43 @@ import pickle
 load_dotenv()
 
 class LinkedInAuthenticator:
-    def __init__(self):
+    def __init__(self, profile_dir="./chrome_profiles/linkedin_session"):
         self.driver = None
         self.is_logged_in = False
+        self.profile_dir = os.path.abspath(profile_dir)
+        # Create profile directory if it doesn't exist
+        os.makedirs(self.profile_dir, exist_ok=True)
         
     def setup_driver(self, headless=False):
-        """Set up Chrome driver with anti-detection measures"""
+        """Set up Chrome driver with anti-detection measures and session persistence"""
         chrome_options = webdriver.ChromeOptions()
+        
+        # Session persistence - most important part
+        chrome_options.add_argument(f"--user-data-dir={self.profile_dir}")
+        chrome_options.add_argument("--profile-directory=Default")
+        
+        # Remote debugging port for reconnection capability
+        chrome_options.add_argument("--remote-debugging-port=9222")
+        
+        # Essential options for data persistence
+        chrome_options.add_argument("--no-first-run")
+        chrome_options.add_argument("--no-default-browser-check")
+        chrome_options.add_argument("--disable-default-apps")
+        chrome_options.add_argument("--disable-session-crashed-bubble")
+        chrome_options.add_argument("--disable-infobars")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--no-sandbox")
+        
+        # Force data and session persistence
+        chrome_options.add_argument("--enable-local-storage")
+        chrome_options.add_argument("--enable-session-storage")
         
         # Anti-detection measures
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
         # Suppress logs
-        chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
         chrome_options.add_argument('--log-level=3')
         
         # Add user agent
@@ -38,11 +60,64 @@ class LinkedInAuthenticator:
         
         # Additional anti-detection
         self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        print("✓ Chrome driver initialized successfully")
+        
+        # Check if existing session exists
+        session_file = os.path.join(self.profile_dir, 'Default', 'Current Session')
+        cookies_file = os.path.join(self.profile_dir, 'Default', 'Cookies')
+        has_existing_session = os.path.exists(session_file) or os.path.exists(cookies_file)
+        
+        if has_existing_session:
+            print("✓ Chrome driver initialized with existing session data")
+        else:
+            print("✓ Chrome driver initialized (new session)")
+        
+        # Check if already logged in
+        self.check_existing_login()
+    
+    def check_existing_login(self):
+        """Check if user is already logged in from previous session"""
+        try:
+            if not self.driver:
+                self.is_logged_in = False
+                return False
+                
+            print("Checking for existing login session...")
+            
+            # Test if driver is still functional
+            try:
+                _ = self.driver.current_url
+            except Exception as e:
+                if "no such window" in str(e).lower() or "target window already closed" in str(e).lower():
+                    print("ℹ Browser window was closed")
+                    self.is_logged_in = False
+                    return False
+                raise
+            
+            self.driver.get('https://www.linkedin.com/feed/')
+            time.sleep(3)
+            
+            # Check if we're on the feed page (logged in)
+            if "/feed" in self.driver.current_url:
+                print("✓ Already logged in from previous session!")
+                self.is_logged_in = True
+                return True
+            else:
+                print("ℹ No active login session found")
+                self.is_logged_in = False
+                return False
+        except Exception as e:
+            print(f"ℹ Could not check existing login: {str(e)}")
+            self.is_logged_in = False
+            return False
     
     def login(self, email=None, password=None):
         """Login to LinkedIn"""
         try:
+            # Check if already logged in from session persistence
+            if self.is_logged_in:
+                print("✓ Already logged in, skipping login process")
+                return True
+            
             # Use provided credentials or get from environment
             email = email or os.getenv('LINKEDIN_EMAIL')
             password = password or os.getenv('LINKEDIN_PASSWORD')
