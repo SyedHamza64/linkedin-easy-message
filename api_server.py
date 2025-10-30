@@ -193,28 +193,84 @@ def restore_driver_session():
             return False
     return False
 
+def kill_orphaned_chromedrivers():
+    """Kill only orphaned ChromeDriver processes (safe - doesn't touch user's Chrome windows)"""
+    try:
+        import subprocess
+        subprocess.run(['taskkill', '/F', '/IM', 'chromedriver.exe'], 
+                      stdout=subprocess.DEVNULL, 
+                      stderr=subprocess.DEVNULL)
+        time.sleep(0.5)
+    except:
+        pass
+
+def show_profile_locked_message():
+    """Display message when profile is locked"""
+    print("\n" + "="*60)
+    print("⚠️  PROFILE IS ALREADY OPENED BY ANOTHER BROWSER INSTANCE")
+    print("="*60)
+    print("\n📋 Please close the LinkedIn automation browser window manually.")
+    print("   (Look for the Chrome window with 'Chrome is being controlled by automated test software')")
+    print("\n✅ After closing the browser, restart this script.")
+    print("="*60 + "\n")
+
 def ensure_authenticator():
     """Ensure authenticator is initialized and driver is ready"""
     global authenticator
-    if authenticator is None or authenticator.driver is None:
-        print("🚀 Initializing LinkedIn browser session...")
-        authenticator = LinkedInAuthenticator()
-        
-        # Try to restore existing session first
-        if restore_driver_session():
-            print("♻️ Using restored browser session")
-        else:
-            # Create new session
+    
+    # Check if authenticator exists and driver is still functional
+    if authenticator is not None and authenticator.driver is not None:
+        try:
+            _ = authenticator.driver.current_url
+            print("♻️ Reusing existing browser session")
+            return authenticator
+        except:
+            # Driver is dead, cleanup
+            try:
+                authenticator.driver.quit()
+            except:
+                pass
+            authenticator = None
+    
+    # Need to initialize browser
+    print("🚀 Initializing LinkedIn browser session...")
+    
+    # PRE-CHECK: Check if profile is locked before attempting to open browser
+    profile_path = os.path.abspath("./chrome_profiles/linkedin_session")
+    lockfile = os.path.join(profile_path, 'lockfile')
+    
+    if os.path.exists(lockfile):
+        show_profile_locked_message()
+        raise Exception("Browser profile is locked - please close the automation browser and restart the script")
+    
+    # Kill orphaned ChromeDriver processes
+    kill_orphaned_chromedrivers()
+    
+    # Create new authenticator
+    authenticator = LinkedInAuthenticator()
+    
+    # Try to restore existing session first
+    if restore_driver_session():
+        print("♻️ Using restored browser session")
+    else:
+        try:
+            # Try to create new browser
             authenticator.setup_driver(headless=False)
-            if not authenticator.load_cookies():
-                print("🔐 No valid cookies found, logging in...")
+            
+            if not authenticator.is_logged_in:
+                print("🔐 No active session found, logging in...")
                 if not authenticator.login():
                     raise Exception("LinkedIn login failed")
-                authenticator.save_cookies()
             else:
-                print("🍪 Using saved cookies for authentication")
-    else:
-        print("♻️ Reusing existing browser session")
+                print("✓ Using persistent session (already logged in)")
+                
+        except Exception as e:
+            if "user data directory is already in use" in str(e).lower():
+                show_profile_locked_message()
+                raise Exception("Browser profile is locked - please close the automation browser and restart the script")
+            else:
+                raise
+    
     return authenticator
 
 def get_responder():
@@ -853,6 +909,52 @@ def run_progressive_sync(limit):
                 'current_conversation': f"Processing: {conv['sender_name']}"
             })
             
+            # Check if conversation already exists and is read - skip if so
+            filename = fetcher._safe_filename(conv['sender_name']) + ".json"
+            filepath = os.path.join(CONVERSATIONS_DIR, filename)
+            
+            should_skip = False
+            if os.path.exists(filepath):
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        existing_data = json.load(f)
+                    # Skip if conversation is read (not unread)
+                    if not existing_data.get('is_unread', False) and not conv.get('is_unread', False):
+                        print(f"⏭️ Skipping conversation {conv_index + 1}/{len(conversations_list)}: {conv['sender_name']} (already saved and read)")
+                        
+                        # Still add to processing order
+                        processing_order.append(conv['sender_name'])
+                        
+                        # Add existing conversation to progress (convert to API format)
+                        conversation_data = {
+                            'sender_name': existing_data.get('sender_name', ''),
+                            'is_unread': existing_data.get('is_unread', False),
+                            'message_count': existing_data.get('total_messages', 0),
+                            'all_messages': existing_data.get('messages', []),
+                            'fetch_time': existing_data.get('fetch_time', ''),
+                            'last_received_message': existing_data.get('last_received_message', ''),
+                            'index': conv_index
+                        }
+                        
+                        # Update sync progress with existing conversation
+                        existing_conversations = sync_progress['conversations'].copy()
+                        updated = False
+                        for i, existing_conv in enumerate(existing_conversations):
+                            if existing_conv['sender_name'].lower() == conv['sender_name'].lower():
+                                existing_conversations[i] = conversation_data
+                                updated = True
+                                break
+                        if not updated:
+                            existing_conversations.append(conversation_data)
+                        sync_progress['conversations'] = existing_conversations
+                        
+                        should_skip = True
+                except Exception as e:
+                    print(f"⚠️ Could not read existing file for {conv['sender_name']}: {e}")
+            
+            if should_skip:
+                continue
+            
             print(f"\n📥 Processing conversation {conv_index + 1}/{len(conversations_list)}: {conv['sender_name']}")
             
             if fetcher.open_conversation(conv):
@@ -1025,5 +1127,76 @@ def shutdown():
     
     return jsonify({'success': True, 'message': 'Shutdown initiated'})
 
+def initialize_on_startup():
+    """Initialize browser and fetch conversations on server startup"""
+    try:
+        print("\n🔄 Initializing browser and fetching conversations...")
+        
+        # Initialize browser (will use saved session if available)
+        auth = ensure_authenticator()
+        
+        if auth.is_logged_in:
+            print("✅ Already logged in from saved session!")
+        else:
+            print("✅ Logged in successfully!")
+        
+        # Navigate to messages page and scroll to load conversations
+        fetcher = LinkedInMessageFetcher(auth.driver)
+        
+        print("📍 Navigating to LinkedIn messages page...")
+        if fetcher.navigate_to_messages():
+            print("✅ Successfully navigated to messages")
+            
+            # Scroll to load conversations (minimum 3 scrolls)
+            print("📜 Scrolling to load conversations...")
+            fetcher.scroll_to_load_conversations(target_count=50, min_scrolls=3)
+        else:
+            print("⚠️ Failed to navigate to messages page")
+        
+        # Check if we have existing conversations
+        existing_conversations = load_individual_conversations()
+        
+        if existing_conversations and len(existing_conversations) > 0:
+            # We have existing conversations, just fetch new/unread ones
+            print(f"📁 Found {len(existing_conversations)} existing conversations")
+            print("📬 Fetching only new/unread conversations...")
+            saved_files = fetcher.fetch_new_conversations_only(limit=50)
+            
+            if saved_files and len(saved_files) > 0:
+                print(f"✅ Fetched {len(saved_files)} new unread conversation(s)")
+            else:
+                print("📭 No new unread messages")
+        else:
+            # No existing conversations, do a full fetch
+            print("📥 No existing conversations found - fetching all conversations...")
+            saved_files = fetcher.fetch_and_save_to_individual_files(
+                include_read=True, 
+                limit=50, 
+                conversations_dir=CONVERSATIONS_DIR
+            )
+            
+            if saved_files and len(saved_files) > 0:
+                print(f"✅ Fetched {len(saved_files)} conversation(s)")
+            else:
+                print("📭 No conversations found")
+        
+        # Update conversation cache after fetching
+        all_conversations = load_individual_conversations()
+        conversation_cache['data'] = all_conversations
+        conversation_cache['last_fetched'] = time.time()
+        print(f"✅ Cache updated with {len(all_conversations)} conversation(s)")
+        
+        print("🎉 Initialization complete! Browser is ready.\n")
+        
+    except Exception as e:
+        print(f"⚠️ Error during initialization: {e}")
+        import traceback
+        traceback.print_exc()
+        print("Server will continue running. Browser will open when you click refresh.\n")
+
 if __name__ == '__main__':
-    app.run(debug=True) 
+    # Initialize browser on startup
+    initialize_on_startup()
+    
+    # Run the Flask app
+    app.run(debug=True, host='127.0.0.1', port=5000, use_reloader=False) 

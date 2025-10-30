@@ -35,11 +35,53 @@ class LinkedInMessageFetcher:
             print(f"✗ Failed to load messages page: {str(e)}")
             return False
     
+    def scroll_to_load_conversations(self, target_count=50, min_scrolls=3):
+        """Scroll the conversation list to load more conversations"""
+        try:
+            # Find the conversation list container
+            container = self.driver.find_element(By.CSS_SELECTOR, ".msg-conversations-container__conversations-list")
+            
+            last_count = 0
+            attempts = 0
+            max_attempts = 15
+            
+            while attempts < max_attempts:
+                # Get current count
+                current_convs = self.driver.find_elements(By.CSS_SELECTOR, "li.msg-conversation-listitem")
+                current_count = len(current_convs)
+                
+                # Always do minimum scrolls first
+                if attempts < min_scrolls:
+                    self.driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", container)
+                    time.sleep(0.8)
+                    attempts += 1
+                    continue
+                
+                # After minimum scrolls, check if we've reached target or no more loading
+                if current_count >= target_count or current_count == last_count:
+                    break
+                
+                # Scroll to bottom of container
+                self.driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", container)
+                time.sleep(0.8)
+                
+                last_count = current_count
+                attempts += 1
+            
+            # Final count
+            final_convs = self.driver.find_elements(By.CSS_SELECTOR, "li.msg-conversation-listitem")
+            print(f"📜 Loaded {len(final_convs)} conversations after scrolling ({attempts} scroll attempts)")
+        except Exception as e:
+            print(f"⚠️ Could not scroll conversations: {e}")
+    
     def get_conversation_list(self, limit=20):
         """Get list of conversations from the left sidebar"""
         conversations = []
         
         try:
+            # Scroll to load more conversations
+            self.scroll_to_load_conversations(limit)
+            
             conv_elements = self.driver.find_elements(By.CSS_SELECTOR, "li.msg-conversation-listitem")
             print(f"Found {len(conv_elements)} conversation elements")
             
@@ -65,16 +107,38 @@ class LinkedInMessageFetcher:
         """Extract preview data from a conversation element"""
         try:
             sender_name = ""
+            
+            # Scroll element into view to ensure it's rendered
             try:
-                name_element = conv_element.find_element(By.CSS_SELECTOR, ".msg-conversation-listitem__participant-names")
+                self.driver.execute_script("arguments[0].scrollIntoView({block: 'nearest'});", conv_element)
+                time.sleep(0.1)  # Small wait for rendering
+            except:
+                pass
+            
+            # Based on actual LinkedIn structure: h3.msg-conversation-listitem__participant-names > div > span.truncate
+            try:
+                # Try the exact structure from LinkedIn
+                name_element = conv_element.find_element(By.CSS_SELECTOR, ".msg-conversation-listitem__participant-names span.truncate")
                 sender_name = name_element.text.strip()
             except:
+                # Fallback: try getting h3 text directly
                 try:
-                    h3_elements = conv_element.find_elements(By.TAG_NAME, "h3")
-                    if h3_elements:
-                        sender_name = h3_elements[0].text.strip()
+                    name_element = conv_element.find_element(By.CSS_SELECTOR, ".msg-conversation-listitem__participant-names")
+                    sender_name = name_element.text.strip()
                 except:
-                    sender_name = f"Unknown {index}"
+                    pass
+            
+            # If still no name, try h3 tag directly
+            if not sender_name:
+                try:
+                    h3 = conv_element.find_element(By.TAG_NAME, "h3")
+                    sender_name = h3.text.strip()
+                except:
+                    pass
+            
+            # Last resort: mark as unknown
+            if not sender_name:
+                sender_name = f"Unknown_Contact_{index}"
             
             # Check for unread messages using multiple methods
             is_unread = False
@@ -683,8 +747,12 @@ class LinkedInMessageFetcher:
                     else:
                         # Just log the conversation name for debugging
                         try:
-                            name_element = conv.find_element(By.CSS_SELECTOR, ".msg-conversation-listitem__participant-names")
+                            # Use same selector as _extract_conversation_preview
+                            name_element = conv.find_element(By.CSS_SELECTOR, ".msg-conversation-listitem__participant-names span.truncate")
                             sender_name = name_element.text.strip()
+                            if not sender_name:
+                                name_element = conv.find_element(By.CSS_SELECTOR, ".msg-conversation-listitem__participant-names")
+                                sender_name = name_element.text.strip()
                             print(f"📋 Skipped read conversation: {sender_name}")
                         except:
                             print(f"📋 Skipped conversation {index}")

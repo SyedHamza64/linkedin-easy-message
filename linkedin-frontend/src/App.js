@@ -29,8 +29,7 @@ function App() {
   const [sortOrder, setSortOrder] = useState("newest"); // 'newest' or 'alpha'
   const [searchQuery, setSearchQuery] = useState("");
   const prevSelectedConversationRef = React.useRef(null);
-  // Track last filter state
-  const [lastFilterUnreadOnly, setLastFilterUnreadOnly] = useState(false);
+  const [syncLimit, setSyncLimit] = useState(50); // Conversation limit for progressive sync
 
   // Helper function to show notifications with auto-disappear
   const showNotification = (type, text, duration = null, isAutoRefresh = false) => {
@@ -290,21 +289,10 @@ function App() {
     prevSelectedConversationRef.current = selectedConversation;
   }, [selectedConversation]);
 
-  // When switching filterUnreadOnly, if going from unread to all, mark selected as read if needed
-  useEffect(() => {
-    if (lastFilterUnreadOnly && !filterUnreadOnly && selectedConversation && selectedConversation.is_unread) {
-      // Mark as read only when switching to All
-      markConversationAsRead(selectedConversation);
-      // Also update selectedConversation state to reflect read
-      setSelectedConversation({ ...selectedConversation, is_unread: false, unread_count: 0 });
-    }
-    setLastFilterUnreadOnly(filterUnreadOnly);
-  }, [filterUnreadOnly]);
-
   const handleSelectConversation = async (conv) => {
     setNotification(null);
-    // Only mark as read if not in unread-only mode
-    if (conv.is_unread && !filterUnreadOnly) {
+    // Always mark as read when clicking on a conversation (even in unread mode)
+    if (conv.is_unread) {
       setConversations(prevConvs => prevConvs.map(c =>
         c.sender_name === conv.sender_name ? { ...c, is_unread: false, unread_count: 0 } : c
       ));
@@ -364,13 +352,13 @@ function App() {
   const handleFullSync = async () => {
     try {
       setIsFullSyncing(true);
-      showNotification("info", "Starting progressive sync...", 2000);
-      console.log("🔄 Starting progressive sync...");
+      showNotification("info", `Starting progressive sync (${syncLimit} conversations)...`, 2000);
+      console.log(`🔄 Starting progressive sync for ${syncLimit} conversations...`);
       
       const res = await fetch("http://127.0.0.1:5000/api/full_sync_progressive", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ limit: 100 })
+        body: JSON.stringify({ limit: syncLimit })
       });
       
       const data = await res.json();
@@ -551,14 +539,35 @@ function App() {
             >
               🔄
             </button>
-            <button 
-              className={`action-btn sync-btn ${isFullSyncing ? 'loading' : ''}`} 
-              onClick={handleFullSync} 
-              title="Progressive sync - fetch and update all conversations in real-time"
-              disabled={isBackgroundLoading || isFullSyncing}
-            >
-              💯
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <select 
+                value={syncLimit} 
+                onChange={(e) => setSyncLimit(Number(e.target.value))}
+                disabled={isBackgroundLoading || isFullSyncing}
+                style={{ 
+                  fontSize: '12px', 
+                  padding: '4px 6px', 
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  cursor: 'pointer'
+                }}
+                title="Select number of conversations to sync"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={30}>30</option>
+                <option value={40}>40</option>
+                <option value={50}>50</option>
+              </select>
+              <button 
+                className={`action-btn sync-btn ${isFullSyncing ? 'loading' : ''}`} 
+                onClick={handleFullSync} 
+                title={`Progressive sync - fetch ${syncLimit} conversations in real-time`}
+                disabled={isBackgroundLoading || isFullSyncing}
+              >
+                💯
+              </button>
+            </div>
             {isFullSyncing && (
               <button 
                 className="action-btn cancel-sync-btn" 
