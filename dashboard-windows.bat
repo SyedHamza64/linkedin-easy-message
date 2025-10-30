@@ -76,7 +76,20 @@ echo Backend:  http://127.0.0.1:5000
 echo Frontend: http://localhost:3000
 echo.
 echo Both services are running in separate windows.
-echo Close those windows to stop the services.
 echo.
-echo Press any key to exit this launcher...
+echo Press ENTER to shutdown both services...
+pause >nul
+
+echo.
+echo ========================================
+echo  Shutting down services...
+echo ========================================
+echo.
+
+REM Run graceful shutdown script
+powershell -ExecutionPolicy Bypass -File "%~dp0graceful_shutdown.ps1"
+
+echo.
+echo All services stopped.
+echo Press any key to exit...
 pause >nul 
