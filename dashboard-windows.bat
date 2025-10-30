@@ -60,12 +60,12 @@ if not exist "linkedin-frontend\node_modules\" (
 
 echo.
 echo [4/5] Starting Backend Server...
-start "LinkedIn Backend" cmd /k "title LinkedIn Backend && cd /d %~dp0 && call venv\Scripts\activate.bat && python api_server.py"
+start "LinkedIn Backend" cmd /c "title LinkedIn Backend && cd /d %~dp0 && call venv\Scripts\activate.bat && python api_server.py"
 timeout /t 2 >nul
 
 echo.
 echo [5/5] Starting Frontend Server...
-start "LinkedIn Frontend" cmd /k "title LinkedIn Frontend && cd /d %~dp0linkedin-frontend && npm start"
+start "LinkedIn Frontend" cmd /c "title LinkedIn Frontend && cd /d %~dp0linkedin-frontend && npm start"
 
 echo.
 echo ========================================
@@ -86,10 +86,27 @@ echo  Shutting down services...
 echo ========================================
 echo.
 
-REM Run graceful shutdown script
-powershell -ExecutionPolicy Bypass -File "%~dp0graceful_shutdown.ps1"
+REM Stop Backend (port 5000)
+echo [1/3] Stopping Backend...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5000 ^| findstr LISTENING') do (
+    taskkill /F /PID %%a /T 2>nul
+)
+
+REM Stop Frontend (port 3000 and all node processes)
+echo [2/3] Stopping Frontend...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3000 ^| findstr LISTENING') do (
+    taskkill /F /PID %%a /T 2>nul
+)
+taskkill /F /IM node.exe /T 2>nul
+
+REM Close all CMD windows with "LinkedIn" in title
+echo [3/3] Closing terminal windows...
+powershell -Command "Get-Process | Where-Object {$_.MainWindowTitle -like '*LinkedIn*'} | Stop-Process -Force" 2>nul
 
 echo.
-echo All services stopped.
-echo Press any key to exit...
-pause >nul 
+echo ========================================
+echo  All services stopped!
+echo ========================================
+echo.
+timeout /t 2 >nul
+exit 
