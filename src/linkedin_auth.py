@@ -7,7 +7,11 @@ import os
 from dotenv import load_dotenv
 import pickle
 
+# Load .env file and show where it's loading from
+env_path = os.path.abspath('.env')
 load_dotenv()
+if os.path.exists(env_path):
+    print(f"📁 Loading credentials from: {env_path}")
 
 class LinkedInAuthenticator:
     def __init__(self, profile_dir="./chrome_profiles/linkedin_session"):
@@ -16,6 +20,7 @@ class LinkedInAuthenticator:
         self.profile_dir = os.path.abspath(profile_dir)
         # Create profile directory if it doesn't exist
         os.makedirs(self.profile_dir, exist_ok=True)
+        print(f"🔧 Using Chrome profile: {self.profile_dir}")
         
     def setup_driver(self, headless=False):
         """Set up Chrome driver with anti-detection measures and session persistence"""
@@ -124,6 +129,10 @@ class LinkedInAuthenticator:
             
             if not email or not password:
                 raise ValueError("LinkedIn credentials not provided")
+            
+            # Show which email is being used (mask the email for privacy)
+            masked_email = email[:3] + "***" + email[email.index("@"):] if "@" in email else "***"
+            print(f"🔐 Using credentials for: {masked_email}")
             
             print("Opening LinkedIn login page...")
             self.driver.get('https://www.linkedin.com/login')
