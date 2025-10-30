@@ -7,33 +7,46 @@ Write-Host " Shutting Down LinkedIn Auto System" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Function to stop processes by window title
-function Stop-ProcessByWindowTitle {
+# Function to kill process tree
+function Stop-ProcessTree {
     param(
-        [string]$Title,
-        [string]$ProcessName
+        [int]$ParentProcessId
     )
     
-    $found = $false
-    Get-Process -Name $ProcessName -ErrorAction SilentlyContinue | ForEach-Object {
-        if ($_.MainWindowTitle -like "*$Title*") {
-            Write-Host "Stopping $Title (PID: $($_.Id))..." -ForegroundColor Yellow
-            Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
-            $found = $true
-        }
+    # Get all child processes
+    $children = Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $ParentProcessId }
+    
+    # Recursively kill children first
+    foreach ($child in $children) {
+        Stop-ProcessTree -ParentProcessId $child.ProcessId
     }
-    return $found
+    
+    # Kill the parent process
+    try {
+        Stop-Process -Id $ParentProcessId -Force -ErrorAction SilentlyContinue
+    } catch {
+        # Already stopped
+    }
 }
 
 # Stop Backend (Python process running api_server.py)
-Write-Host "[1/2] Stopping Backend Server..." -ForegroundColor Green
-$backendStopped = Stop-ProcessByWindowTitle -Title "LinkedIn Backend" -ProcessName "python"
-if (-not $backendStopped) {
-    # Fallback: try to stop by port 5000
-    $backendPID = (Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue).OwningProcess
-    if ($backendPID) {
-        Write-Host "Stopping backend on port 5000 (PID: $backendPID)..." -ForegroundColor Yellow
-        Stop-Process -Id $backendPID -Force -ErrorAction SilentlyContinue
+Write-Host "[1/3] Stopping Backend Server..." -ForegroundColor Green
+$backendStopped = $false
+
+# Try to find backend by port 5000
+$backendPID = (Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue).OwningProcess | Select-Object -First 1
+if ($backendPID) {
+    Write-Host "Found backend on port 5000 (PID: $backendPID)" -ForegroundColor Yellow
+    Stop-ProcessTree -ParentProcessId $backendPID
+    $backendStopped = $true
+}
+
+# Also try to find by window title
+Get-Process -Name "python" -ErrorAction SilentlyContinue | ForEach-Object {
+    $cmdline = (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine
+    if ($cmdline -like "*api_server.py*") {
+        Write-Host "Found backend process (PID: $($_.Id))" -ForegroundColor Yellow
+        Stop-ProcessTree -ParentProcessId $_.Id
         $backendStopped = $true
     }
 }
@@ -47,14 +60,23 @@ if ($backendStopped) {
 Start-Sleep -Seconds 1
 
 # Stop Frontend (Node process running npm start)
-Write-Host "[2/2] Stopping Frontend Server..." -ForegroundColor Green
-$frontendStopped = Stop-ProcessByWindowTitle -Title "LinkedIn Frontend" -ProcessName "node"
-if (-not $frontendStopped) {
-    # Fallback: try to stop by port 3000
-    $frontendPID = (Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue).OwningProcess
-    if ($frontendPID) {
-        Write-Host "Stopping frontend on port 3000 (PID: $frontendPID)..." -ForegroundColor Yellow
-        Stop-Process -Id $frontendPID -Force -ErrorAction SilentlyContinue
+Write-Host "[2/3] Stopping Frontend Server..." -ForegroundColor Green
+$frontendStopped = $false
+
+# Try to find frontend by port 3000
+$frontendPID = (Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue).OwningProcess | Select-Object -First 1
+if ($frontendPID) {
+    Write-Host "Found frontend on port 3000 (PID: $frontendPID)" -ForegroundColor Yellow
+    Stop-ProcessTree -ParentProcessId $frontendPID
+    $frontendStopped = $true
+}
+
+# Kill all node processes related to our app (more aggressive approach)
+Get-Process -Name "node" -ErrorAction SilentlyContinue | ForEach-Object {
+    $cmdline = (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine
+    if ($cmdline -like "*linkedin-frontend*" -or $cmdline -like "*react-scripts*") {
+        Write-Host "Found frontend process (PID: $($_.Id))" -ForegroundColor Yellow
+        Stop-ProcessTree -ParentProcessId $_.Id
         $frontendStopped = $true
     }
 }
@@ -65,15 +87,16 @@ if ($frontendStopped) {
     Write-Host "✗ Frontend not found or already stopped" -ForegroundColor Gray
 }
 
-# Also close the CMD windows if they're still open
+Start-Sleep -Seconds 1
+
+# Close the CMD windows
+Write-Host "[3/3] Closing launcher windows..." -ForegroundColor Green
 Get-Process -Name "cmd" -ErrorAction SilentlyContinue | Where-Object {
     $_.MainWindowTitle -like "*LinkedIn Backend*" -or $_.MainWindowTitle -like "*LinkedIn Frontend*"
 } | ForEach-Object {
     Write-Host "Closing window: $($_.MainWindowTitle)..." -ForegroundColor Yellow
     Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
 }
-
-Start-Sleep -Seconds 1
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
