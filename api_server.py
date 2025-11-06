@@ -430,18 +430,32 @@ def get_messages_background():
         # Fast path: if unread_only, do a very quick unread badge probe and exit early
         if unread_only:
             try:
-                # Avoid navigating if already on messages
+                # Ensure we're on messages page
                 if "/messaging/" not in authenticator.driver.current_url:
                     authenticator.driver.get('https://www.linkedin.com/messaging/')
-                # Quick check for any unread badge on page (broaden selector)
-                badges = authenticator.driver.find_elements(By.CSS_SELECTOR, ".notification-badge__count")
-                any_unread = False
-                for b in badges:
-                    txt = (b.text or '').strip()
-                    if txt.isdigit() and int(txt) > 0:
-                        any_unread = True
-                        break
-                if not any_unread:
+
+                # Probe for unread indicators with a short grace period for DOM paint
+                start = time.time()
+                probe_timeout = 1.2  # seconds
+                found_unread = False
+                while time.time() - start < probe_timeout and not found_unread:
+                    # Only criterion: visible notification badges with numeric count
+                    try:
+                        badges = authenticator.driver.find_elements(
+                            By.CSS_SELECTOR,
+                            ".notification-badge.notification-badge--show .notification-badge__count"
+                        )
+                        for b in badges:
+                            txt = (b.text or '').strip()
+                            if txt.isdigit() and int(txt) > 0:
+                                found_unread = True
+                                break
+                    except Exception:
+                        pass
+                    if not found_unread:
+                        time.sleep(0.1)
+
+                if not found_unread:
                     print("📬 Fast path: No unread badges detected; returning immediately")
                     existing = conversation_cache['data'] if conversation_cache['data'] is not None else load_individual_conversations()
                     return jsonify({

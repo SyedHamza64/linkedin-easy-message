@@ -729,9 +729,11 @@ class LinkedInMessageFetcher:
         
         try:
             # Early exit: if no unread badges exist anywhere, return quickly
+            # Fast early-exit: only criterion = visible numeric unread badge
             try:
-                unread_badges = self.driver.find_elements(By.CSS_SELECTOR, ".notification-badge.notification-badge--show")
-                if not unread_badges or len(unread_badges) == 0:
+                unread_badges = self.driver.find_elements(By.CSS_SELECTOR, ".notification-badge.notification-badge--show .notification-badge__count")
+                any_badge = any(((b.text or '').strip().isdigit() and int((b.text or '0').strip()) > 0) for b in unread_badges)
+                if not any_badge:
                     print("📬 No unread badges detected; returning empty quickly")
                     return []
             except Exception:
