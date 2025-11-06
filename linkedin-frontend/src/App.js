@@ -76,11 +76,11 @@ function App() {
   };
 
   // Fetch new conversations in background
-  const fetchNewConversations = async (unreadOnly = false) => {
+  const fetchNewConversations = async (unreadOnly = false, limit = 25) => {
     try {
       setIsBackgroundLoading(true);
       console.log("🔄 Fetching new conversations in background...");
-      const res = await fetch(`http://127.0.0.1:5000/api/messages/background?unread_only=${unreadOnly ? '1' : '0'}`);
+      const res = await fetch(`http://127.0.0.1:5000/api/messages/background?unread_only=${unreadOnly ? '1' : '0'}&limit=${limit}`);
       const data = await res.json();
       
       if (data.success) {
@@ -148,7 +148,7 @@ function App() {
         console.log(`⏰ Auto-refresh triggered (${autoRefreshInterval}s interval)`);
         showNotification("info", "Auto-refreshing conversations...", 2000, true);
         
-        fetchNewConversations(true).then(() => {
+        fetchNewConversations(true, 25).then(() => {
           // Clear auto-refresh notification after 2 seconds
           setTimeout(() => {
             setNotification(prev => {
@@ -255,7 +255,7 @@ function App() {
       setTimeout(() => {
         console.log("🔄 Starting background fetch for new conversations...");
         setNotification({ type: "info", text: "Checking for new conversations in background..." });
-        fetchNewConversations(true); // Fetch only unread conversations in background for efficiency
+        fetchNewConversations(true, 25); // Fetch only unread conversations with a small limit for speed
       }, 1000);
     };
     
@@ -322,18 +322,18 @@ function App() {
       if (data.success && data.conversation) {
         setNotification({ type: "success", text: "Message sent successfully!" });
         setTimeout(() => setNotification(null), 3000);
-        // Update only the affected conversation in state
+        // Update only the affected conversation in state and move it to the top
+        const updatedConversation = {
+          ...data.conversation,
+          // Ensure sorting picks this as most recent
+          last_message_timestamp: new Date().toISOString()
+        };
         setConversations(prevConvs => {
-          const idx = prevConvs.findIndex(c => c.sender_name === data.conversation.sender_name);
-          if (idx !== -1) {
-            const updated = [...prevConvs];
-            updated[idx] = data.conversation;
-            return updated;
-          } else {
-            return [...prevConvs, data.conversation];
-          }
+          const withoutThis = prevConvs.filter(c => c.sender_name !== updatedConversation.sender_name);
+          // Place the updated conversation at the beginning
+          return [updatedConversation, ...withoutThis];
         });
-        setSelectedConversation(data.conversation);
+        setSelectedConversation(updatedConversation);
       } else {
         setNotification({ type: "error", text: data.error || "Failed to send message." });
         setTimeout(() => setNotification(null), 4000);
@@ -345,8 +345,8 @@ function App() {
   };
 
   const handleManualRefresh = async () => {
-    // Fetch only unread conversations in background
-    await fetchNewConversations(true);
+    // Fetch only unread conversations quickly with a small limit
+    await fetchNewConversations(true, 25);
   };
 
   const handleFullSync = async () => {
@@ -558,6 +558,9 @@ function App() {
                 <option value={30}>30</option>
                 <option value={40}>40</option>
                 <option value={50}>50</option>
+                <option value={80}>80</option>
+                <option value={100}>100</option>
+                <option value={120}>120</option>
               </select>
               <button 
                 className={`action-btn sync-btn ${isFullSyncing ? 'loading' : ''}`} 
