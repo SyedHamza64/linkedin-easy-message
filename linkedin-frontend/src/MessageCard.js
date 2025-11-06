@@ -17,18 +17,21 @@ const MessageCard = ({ message, isSelected, onClick }) => {
   const role = nameParts[1] || '';
   const location = nameParts[2] || '';
 
-  // Get the last received message for preview
+  // Get the latest message (sent or received) for preview
   const getLastMessage = () => {
-    if (message.last_received_message) {
-      return message.last_received_message;
-    }
     if (message.all_messages && message.all_messages.length > 0) {
-      // Find the last received message (not sent by us)
-      const lastReceived = message.all_messages
-        .filter(msg => !msg.is_sent)
-        .pop();
-      return lastReceived ? lastReceived.message : '';
+      const msgs = [...message.all_messages];
+      // Prefer ordering by message_index when present
+      msgs.sort((a, b) => {
+        const ai = typeof a.message_index === 'number' ? a.message_index : -1;
+        const bi = typeof b.message_index === 'number' ? b.message_index : -1;
+        return ai - bi;
+      });
+      const last = msgs[msgs.length - 1];
+      if (last && last.message) return last.message;
     }
+    // Fallbacks: last_received_message -> conversation_preview -> message
+    if (message.last_received_message) return message.last_received_message;
     return message.conversation_preview || message.message || '';
   };
 

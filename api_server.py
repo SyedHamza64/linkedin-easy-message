@@ -8,6 +8,7 @@ import signal
 import sys
 import re
 from src.csv_handler import CSVHandler
+from selenium.webdriver.common.by import By
 from src.linkedin_auth import LinkedInAuthenticator
 from src.linkedin_responder import LinkedInResponder
 from src.linkedin_messages import LinkedInMessageFetcher
@@ -426,6 +427,33 @@ def get_messages_background():
         print("✅ Authenticator ready, starting background LinkedIn fetch...")
         fetcher = LinkedInMessageFetcher(authenticator.driver)
         
+        # Fast path: if unread_only, do a very quick unread badge probe and exit early
+        if unread_only:
+            try:
+                # Avoid navigating if already on messages
+                if "/messaging/" not in authenticator.driver.current_url:
+                    authenticator.driver.get('https://www.linkedin.com/messaging/')
+                # Quick check for any unread badge on page (broaden selector)
+                badges = authenticator.driver.find_elements(By.CSS_SELECTOR, ".notification-badge__count")
+                any_unread = False
+                for b in badges:
+                    txt = (b.text or '').strip()
+                    if txt.isdigit() and int(txt) > 0:
+                        any_unread = True
+                        break
+                if not any_unread:
+                    print("📬 Fast path: No unread badges detected; returning immediately")
+                    existing = conversation_cache['data'] if conversation_cache['data'] is not None else load_individual_conversations()
+                    return jsonify({
+                        'success': True,
+                        'new_count': 0,
+                        'updated_count': 0,
+                        'total_count': len(existing or []),
+                        'conversations': existing or []
+                    })
+            except Exception as e:
+                print(f"[WARN] Fast unread probe failed, proceeding normally: {e}")
+
         # Get existing conversations from cache/file
         existing_conversations = []
         if conversation_cache['data'] is not None:
@@ -433,13 +461,17 @@ def get_messages_background():
         elif os.path.exists(CONVERSATIONS_DIR):
             existing_conversations = load_individual_conversations()
         
-        # Use the new efficient method to fetch only new/unread conversations
+        # Use the new efficient method to fetch only new/unread conversations with configurable limit
+        try:
+            limit = int(request.args.get('limit', 25))
+        except Exception:
+            limit = 25
         if unread_only:
             print("📬 Background: Fetching only new/unread conversations efficiently...")
-            new_conversations = fetcher.fetch_new_or_unread_conversations(limit=50)
+            new_conversations = fetcher.fetch_new_or_unread_conversations(limit=limit)
         else:
             print("📬 Background: Fetching only new/unread conversations efficiently (not unread_only)...")
-            new_conversations = fetcher.fetch_new_or_unread_conversations(limit=50)
+            new_conversations = fetcher.fetch_new_or_unread_conversations(limit=limit)
         
         # Merge new conversations with existing ones
         merged_conversations = existing_conversations.copy()
@@ -462,8 +494,11 @@ def get_messages_background():
                 merged_conversations.append(new_conv)
                 new_count += 1
         
-        # Save merged conversations to individual files
-        fetcher.save_conversations_to_individual_files(merged_conversations, CONVERSATIONS_DIR)
+        # Save ONLY the changed conversations to individual files to avoid heavy I/O
+        try:
+            fetcher.save_conversations_to_individual_files(new_conversations, CONVERSATIONS_DIR)
+        except Exception as e:
+            print(f"⚠️ Error saving changed conversations: {e}")
         
         # Update in-memory cache
         conversation_cache['data'] = merged_conversations
@@ -525,13 +560,40 @@ def get_single_conversation(sender_name):
             else:
                 conversation_cache['data'] = [conversation_data]
             conversation_cache['last_fetched'] = now
-            # Update JSON file
-            if os.path.exists(CONVERSATIONS_DIR):
-                with open(os.path.join(CONVERSATIONS_DIR, f"{_safe_filename(sender_name)}.json"), 'w', encoding='utf-8') as f:
-                    json.dump(conversation_data, f, indent=2, ensure_ascii=False)
-            else:
-                with open(CONVERSATIONS_DIR, 'w', encoding='utf-8') as f:
-                    json.dump({'conversations': [conversation_data]}, f, indent=2, ensure_ascii=False)
+            # Update JSON file using the established individual-file schema
+            try:
+                os.makedirs(CONVERSATIONS_DIR, exist_ok=True)
+                filepath = os.path.join(CONVERSATIONS_DIR, f"{_safe_filename(sender_name)}.json")
+                # If we failed to extract any messages, do not overwrite an existing file with empty data
+                if len(messages) == 0 and os.path.exists(filepath):
+                    print(f"⚠️ No messages extracted for {sender_name}, preserving existing file contents")
+                else:
+                    # Find last received (incoming) message for preview
+                    last_received = ""
+                    for msg in reversed(messages):
+                        if not msg.get('is_sent', False):
+                            last_received = msg.get('message', '')
+                            break
+                    individual_data = {
+                        'sender_name': target_conv['sender_name'],
+                        'is_unread': target_conv.get('is_unread', False),
+                        'conversation_preview': (last_received[:100] + "...") if len(last_received) > 100 else last_received,
+                        'total_messages': len(messages),
+                        'messages': [
+                            {
+                                'is_sent': m.get('is_sent', False),
+                                'message': m.get('message', ''),
+                                'timestamp': m.get('timestamp', '')
+                            }
+                            for m in messages
+                        ],
+                        'fetch_time': conversation_data.get('fetch_time', time.strftime('%Y-%m-%dT%H:%M:%S')),
+                        'last_received_message': last_received
+                    }
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        json.dump(individual_data, f, indent=2, ensure_ascii=False)
+            except Exception as e:
+                print(f"⚠️ Could not write individual conversation file for {sender_name}: {e}")
             return jsonify(conversation_data)
         else:
             return jsonify({'error': 'Failed to open conversation'}), 500
@@ -603,12 +665,107 @@ def send_message():
     try:
         responder = get_responder()
         success = responder.send_response(sender_name, message)
-        # After sending, only re-fetch the affected conversation
-        single_conv_resp = get_single_conversation(sender_name)
-        if isinstance(single_conv_resp, tuple):
-            # Error occurred
-            return jsonify({'success': success, 'error': single_conv_resp[0].json.get('error', 'Unknown error')}), 500
-        return jsonify({'success': success, 'conversation': single_conv_resp.json})
+
+        # Optimistic, fast return: update cache and file without a slow re-fetch
+        now_iso = datetime.now().isoformat()
+
+        # Start from existing conversation (cache or file) if available
+        existing_conv = None
+        if conversation_cache['data'] is not None:
+            for conv in conversation_cache['data']:
+                if conv.get('sender_name', '').lower() == sender_name.lower():
+                    existing_conv = conv
+                    break
+
+        # If not in cache, try to read individual file
+        if existing_conv is None:
+            try:
+                filepath = os.path.join(CONVERSATIONS_DIR, f"{_safe_filename(sender_name)}.json")
+                if os.path.exists(filepath):
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        file_data = json.load(f)
+                    # Convert individual file schema to API shape
+                    existing_conv = {
+                        'sender_name': file_data.get('sender_name', sender_name),
+                        'is_unread': file_data.get('is_unread', False),
+                        'message_count': file_data.get('total_messages', 0),
+                        'all_messages': file_data.get('messages', []),
+                        'fetch_time': file_data.get('fetch_time', now_iso)
+                    }
+            except Exception as e:
+                print(f"[WARN] Could not read existing individual file for {sender_name}: {e}")
+
+        # Build updated conversation
+        if existing_conv is None:
+            existing_conv = {
+                'sender_name': sender_name,
+                'is_unread': False,
+                'message_count': 0,
+                'all_messages': [],
+                'fetch_time': now_iso
+            }
+
+        sent_msg = {
+            'is_sent': True,
+            'message': message,
+            'timestamp': now_iso,
+            'message_index': len(existing_conv.get('all_messages', []))
+        }
+        all_messages = existing_conv.get('all_messages', []) + [sent_msg]
+
+        updated_conv = {
+            **existing_conv,
+            'all_messages': all_messages,
+            'message_count': len(all_messages),
+            'fetch_time': now_iso
+        }
+
+        # Update cache entry in-place or append
+        try:
+            if conversation_cache['data'] is None:
+                conversation_cache['data'] = [updated_conv]
+            else:
+                replaced = False
+                for i, conv in enumerate(conversation_cache['data']):
+                    if conv.get('sender_name', '').lower() == sender_name.lower():
+                        conversation_cache['data'][i] = updated_conv
+                        replaced = True
+                        break
+                if not replaced:
+                    conversation_cache['data'].append(updated_conv)
+            conversation_cache['last_fetched'] = time.time()
+        except Exception as e:
+            print(f"[WARN] Could not update cache after send: {e}")
+
+        # Write individual file in established schema (best-effort)
+        try:
+            os.makedirs(CONVERSATIONS_DIR, exist_ok=True)
+            last_received = ""
+            for msg in reversed(all_messages):
+                if not msg.get('is_sent', False):
+                    last_received = msg.get('message', '')
+                    break
+            individual_data = {
+                'sender_name': updated_conv['sender_name'],
+                'is_unread': updated_conv.get('is_unread', False),
+                'conversation_preview': (last_received[:100] + "...") if len(last_received) > 100 else last_received,
+                'total_messages': len(all_messages),
+                'messages': [
+                    {
+                        'is_sent': m.get('is_sent', False),
+                        'message': m.get('message', ''),
+                        'timestamp': m.get('timestamp', '')
+                    } for m in all_messages
+                ],
+                'fetch_time': now_iso,
+                'last_received_message': last_received
+            }
+            with open(os.path.join(CONVERSATIONS_DIR, f"{_safe_filename(sender_name)}.json"), 'w', encoding='utf-8') as f:
+                json.dump(individual_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"[WARN] Could not persist individual file after send: {e}")
+
+        return jsonify({'success': success, 'conversation': updated_conv})
     except Exception as e:
         print(f"Error sending message: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -653,10 +810,19 @@ def mark_conversation_read(sender_name):
                     conv['unread_count'] = 0
                     print(f"📬 Marked conversation with {sender_name} as read")
                     break
-        # Update the JSON file as well
-        if os.path.exists(CONVERSATIONS_DIR):
-            with open(os.path.join(CONVERSATIONS_DIR, f"{_safe_filename(sender_name)}.json"), 'w', encoding='utf-8') as f:
-                json.dump({'conversations': [conv for conv in conversation_cache['data'] if conv['sender_name'].lower() != sender_name.lower()]}, f, indent=2, ensure_ascii=False)
+        # Update the individual JSON file to mark as read using the same schema
+        try:
+            filepath = os.path.join(CONVERSATIONS_DIR, f"{_safe_filename(sender_name)}.json")
+            if os.path.exists(filepath):
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    individual_data = json.load(f)
+                # Ensure boolean field is consistent
+                individual_data['is_unread'] = False
+                # Write back preserving the established schema
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(individual_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"[WARN] Could not update individual file for mark_read: {e}")
         return jsonify({'success': True, 'message': f'Marked {sender_name} as read'})
     except Exception as e:
         print(f"Error marking conversation as read: {e}")

@@ -1,10 +1,21 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./ConversationDetail.css";
 
 function ConversationDetail({ conversation, templates, onSend, hrName }) {
   const [selectedTemplateIdx, setSelectedTemplateIdx] = useState(null);
   const [message, setMessage] = useState("");
   const [pendingMessages, setPendingMessages] = useState([]); // For optimistic UI
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = (smooth = true) => {
+    try {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+      }
+    } catch (e) {
+      // No-op if scrolling fails
+    }
+  };
 
 
 
@@ -102,11 +113,15 @@ function ConversationDetail({ conversation, templates, onSend, hrName }) {
         pending: true
       };
       setPendingMessages((prev) => [...prev, pendingMsg]);
+      // Scroll immediately to bottom to show the pending message
+      setTimeout(() => scrollToBottom(true), 0);
       onSend(conversation.sender_name, message).then(() => {
         // On success, pending message will be replaced by real one from backend
         setPendingMessages([]);
         setMessage("");
         setSelectedTemplateIdx(null);
+        // Ensure we are at the bottom after send resolves
+        setTimeout(() => scrollToBottom(true), 0);
       }).catch(() => {
         // On error, remove pending message
         setPendingMessages([]);
@@ -162,6 +177,7 @@ function ConversationDetail({ conversation, templates, onSend, hrName }) {
           ) : (
             <div className="no-messages">No messages in this conversation.</div>
           )}
+          <div ref={messagesEndRef} />
         </div>
         <div className="message-input-section">
           <div className="input-container">

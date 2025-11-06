@@ -728,6 +728,15 @@ class LinkedInMessageFetcher:
         new_or_unread_conversations = []
         
         try:
+            # Early exit: if no unread badges exist anywhere, return quickly
+            try:
+                unread_badges = self.driver.find_elements(By.CSS_SELECTOR, ".notification-badge.notification-badge--show")
+                if not unread_badges or len(unread_badges) == 0:
+                    print("📬 No unread badges detected; returning empty quickly")
+                    return []
+            except Exception:
+                # If this check fails, proceed with normal path
+                pass
             conv_elements = self.driver.find_elements(By.CSS_SELECTOR, "li.msg-conversation-listitem")
             print(f"🔍 Scanning {len(conv_elements)} conversations for new/unread messages...")
             
